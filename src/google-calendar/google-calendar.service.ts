@@ -133,6 +133,7 @@ export class GoogleCalendarService {
   async createEvent(
     calendarId: string = 'primary',
     event: calendar_v3.Schema$Event,
+    sendNotifications: boolean = false,
   ): Promise<calendar_v3.Schema$Event> {
     if (!this.calendar) {
       throw new Error('Google Calendar not properly configured');
@@ -142,6 +143,7 @@ export class GoogleCalendarService {
       const response = await this.calendar.events.insert({
         calendarId,
         requestBody: event,
+        sendUpdates: sendNotifications ? 'all' : 'none',
       });
 
       this.logger.log(`Event created: ${response.data.id}`);
@@ -159,6 +161,7 @@ export class GoogleCalendarService {
     calendarId: string = 'primary',
     eventId: string,
     event: calendar_v3.Schema$Event,
+    sendNotifications: boolean = false,
   ): Promise<calendar_v3.Schema$Event> {
     if (!this.calendar) {
       throw new Error('Google Calendar not properly configured');
@@ -169,12 +172,53 @@ export class GoogleCalendarService {
         calendarId,
         eventId,
         requestBody: event,
+        sendUpdates: sendNotifications ? 'all' : 'none',
       });
 
       this.logger.log(`Event updated: ${eventId}`);
       return response.data;
     } catch (error) {
       this.logger.error('Failed to update event', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add attendees to an existing event
+   */
+  async addAttendeesToEvent(
+    calendarId: string = 'primary',
+    eventId: string,
+    attendees: string[],
+    sendNotifications: boolean = true,
+  ): Promise<calendar_v3.Schema$Event> {
+    if (!this.calendar) {
+      throw new Error('Google Calendar not properly configured');
+    }
+
+    try {
+      // Get the current event
+      const currentEvent = await this.getEvent(calendarId, eventId);
+
+      // Add new attendees to existing ones
+      const existingAttendees = currentEvent.attendees || [];
+      const newAttendees = attendees.map((email) => ({ email }));
+      const allAttendees = [...existingAttendees, ...newAttendees];
+
+      // Update the event
+      const updatedEvent = {
+        ...currentEvent,
+        attendees: allAttendees,
+      };
+
+      return this.updateEvent(
+        calendarId,
+        eventId,
+        updatedEvent,
+        sendNotifications,
+      );
+    } catch (error) {
+      this.logger.error('Failed to add attendees to event', error);
       throw error;
     }
   }
