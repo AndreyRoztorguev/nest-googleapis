@@ -125,6 +125,11 @@ export class GoogleCalendarController {
     required: false,
     description: 'Send email notifications to attendees',
   })
+  @ApiQuery({
+    name: 'addGoogleMeet',
+    required: false,
+    description: 'Add Google Meet link to the event (default: true)',
+  })
   @ApiResponse({ status: 201, description: 'Event created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid request data' })
   @UsePipes(new ValidationPipe({ transform: true }))
@@ -132,6 +137,7 @@ export class GoogleCalendarController {
     @Body() createEventDto: CreateEventDto,
     @Query('calendarId') calendarId?: string,
     @Query('sendNotifications') sendNotifications?: boolean,
+    @Query('addGoogleMeet') addGoogleMeet?: boolean,
   ): Promise<calendar_v3.Schema$Event> {
     // Convert DTO to Google Calendar event format
     const event: calendar_v3.Schema$Event = {
@@ -147,6 +153,7 @@ export class GoogleCalendarController {
       calendarId,
       event,
       sendNotifications || false,
+      addGoogleMeet !== false, // Default to true
     );
   }
 
@@ -186,6 +193,35 @@ export class GoogleCalendarController {
       calendarId,
       eventId,
       attendees,
+      sendNotifications !== false, // Default to true
+    );
+  }
+
+  @Post('events/:eventId/google-meet')
+  @ApiOperation({ summary: 'Add Google Meet link to an existing event' })
+  @ApiParam({ name: 'eventId', description: 'Event ID' })
+  @ApiQuery({
+    name: 'calendarId',
+    required: false,
+    description: 'Calendar ID (defaults to primary)',
+  })
+  @ApiQuery({
+    name: 'sendNotifications',
+    required: false,
+    description: 'Send email notifications about the Google Meet addition',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Google Meet link added successfully',
+  })
+  async addGoogleMeetToEvent(
+    @Param('eventId') eventId: string,
+    @Query('calendarId') calendarId?: string,
+    @Query('sendNotifications') sendNotifications?: boolean,
+  ): Promise<calendar_v3.Schema$Event> {
+    return this.googleCalendarService.addGoogleMeetToEvent(
+      calendarId,
+      eventId,
       sendNotifications !== false, // Default to true
     );
   }

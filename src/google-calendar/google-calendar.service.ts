@@ -134,16 +134,23 @@ export class GoogleCalendarService {
     calendarId: string = 'primary',
     event: calendar_v3.Schema$Event,
     sendNotifications: boolean = false,
+    addGoogleMeet: boolean = true,
   ): Promise<calendar_v3.Schema$Event> {
     if (!this.calendar) {
       throw new Error('Google Calendar not properly configured');
     }
 
     try {
+      // Add Google Meet link if requested
+      const eventWithMeet = addGoogleMeet
+        ? this.addGoogleMeetToEventData(event)
+        : event;
+
       const response = await this.calendar.events.insert({
         calendarId,
-        requestBody: event,
+        requestBody: eventWithMeet,
         sendUpdates: sendNotifications ? 'all' : 'none',
+        conferenceDataVersion: addGoogleMeet ? 1 : 0,
       });
 
       this.logger.log(`Event created: ${response.data.id}`);
@@ -152,6 +159,25 @@ export class GoogleCalendarService {
       this.logger.error('Failed to create event', error);
       throw error;
     }
+  }
+
+  /**
+   * Add Google Meet link to an event (private helper)
+   */
+  private addGoogleMeetToEventData(
+    event: calendar_v3.Schema$Event,
+  ): calendar_v3.Schema$Event {
+    return {
+      ...event,
+      conferenceData: {
+        createRequest: {
+          requestId: `meet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          conferenceSolutionKey: {
+            type: 'hangoutsMeet',
+          },
+        },
+      },
+    };
   }
 
   /**
@@ -219,6 +245,42 @@ export class GoogleCalendarService {
       );
     } catch (error) {
       this.logger.error('Failed to add attendees to event', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add Google Meet link to an existing event
+   */
+  async addGoogleMeetToEvent(
+    calendarId: string = 'primary',
+    eventId: string,
+    sendNotifications: boolean = true,
+  ): Promise<calendar_v3.Schema$Event> {
+    if (!this.calendar) {
+      throw new Error('Google Calendar not properly configured');
+    }
+
+    try {
+      // Get the current event
+      const currentEvent = await this.getEvent(calendarId, eventId);
+
+      // Add Google Meet to the event
+      const eventWithMeet = this.addGoogleMeetToEventData(currentEvent);
+
+      // Update the event with conference data
+      const response = await this.calendar.events.update({
+        calendarId,
+        eventId,
+        requestBody: eventWithMeet,
+        sendUpdates: sendNotifications ? 'all' : 'none',
+        conferenceDataVersion: 1,
+      });
+
+      this.logger.log(`Google Meet added to event: ${eventId}`);
+      return response.data;
+    } catch (error) {
+      this.logger.error('Failed to add Google Meet to event', error);
       throw error;
     }
   }
